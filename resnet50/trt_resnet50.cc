@@ -16,7 +16,6 @@ namespace resnet50 {
 
 Resnet50Plugin::Resnet50Plugin(const Resnet50Parameter& parameter)
   : parameter_(parameter) {
-
   image_memory_size_ = parameter.img_info.c * parameter.img_info.w * parameter.img_info.h * sizeof(float);
   std::cout << "Resnet50Plugin image_memory_size : " << image_memory_size_ << std::endl;
   CUDA_CHECK(cudaMallocHost((void**)&input_data_, image_memory_size_));
