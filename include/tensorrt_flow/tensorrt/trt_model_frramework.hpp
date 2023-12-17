@@ -16,15 +16,19 @@ namespace model {
 template<typename T> void destroy_trt_ptr(T* ptr) {
   if (ptr) {
     std::string type_name = typeid(T).name();
-    LOGD("Destroy %s", type_name.c_str());
     ptr->destroy();
   };
 }
 
 
 struct ModelFrameworkParameter {
-  std::string          onnx_file_path{""};
-  std::string          engine_file_path{""};   // TODO
+  std::string onnx_file_path{""};
+  std::string engine_file_path{""};
+  bool        is_use_engine_cache{true};
+
+  size_t engine_input_count{1};
+  size_t engine_output_count{1};
+
   logger::Level        logger_level{logger::Level::VERB};
   precision::Precision prec{precision::Precision::FP32};
 
@@ -52,12 +56,12 @@ public:
 
 
   template<typename InputRawDataType> inline std::any Infer(InputRawDataType&& input_raw) {
-    std::any          any_input_data = std::make_any<InputRawDataType>(std::move(input_raw));
-    plugin_ptr_->PreProcess(any_input_data, binding_data_.data(), input_count_, inputs_dims_, stream_);
+    std::any any_input_data = std::make_any<InputRawDataType>(std::move(input_raw));
+    plugin_ptr_->PreProcess(any_input_data, binding_data_.data(), model_framework_parameter_.engine_input_count, inputs_dims_, stream_);
 
     context_->enqueueV2(binding_data_.data(), stream_, nullptr);
 
-    return plugin_ptr_->PostProcess(&(binding_data_[input_count_]), output_count_, outputs_dims_, stream_);
+    return plugin_ptr_->PostProcess(&(binding_data_[model_framework_parameter_.engine_input_count]), model_framework_parameter_.engine_output_count, outputs_dims_, stream_);
   }
 
 private:
@@ -74,8 +78,6 @@ private:
   cudaStream_t                stream_;
 
   std::vector<void*> binding_data_{};
-  int32_t            input_count_{0};
-  int32_t            output_count_{0};
 
   std::unique_ptr<ModelPlugin> plugin_ptr_{nullptr};
 };

@@ -6,12 +6,12 @@
 #include <stdarg.h>
 #include <string>
 
-#define LOGF(...) logger::Logger::__log_info(logger::Level::FATAL, __VA_ARGS__)
-#define LOGE(...) logger::Logger::__log_info(logger::Level::ERROR, __VA_ARGS__)
-#define LOGW(...) logger::Logger::__log_info(logger::Level::WARN, __VA_ARGS__)
-#define LOG(...) logger::Logger::__log_info(logger::Level::INFO, __VA_ARGS__)
-#define LOGV(...) logger::Logger::__log_info(logger::Level::VERB, __VA_ARGS__)
-#define LOGD(...) logger::Logger::__log_info(logger::Level::DEBUG, __VA_ARGS__)
+#define LOG_FATAL(...) tensorrt_flow::logger::Logger::__log_info(tensorrt_flow::logger::Level::FATAL, __VA_ARGS__)
+#define LOG_ERROR(...) tensorrt_flow::logger::Logger::__log_info(tensorrt_flow::logger::Level::ERROR, __VA_ARGS__)
+#define LOG_WARN(...) tensorrt_flow::logger::Logger::__log_info(tensorrt_flow::logger::Level::WARN, __VA_ARGS__)
+#define LOG_INFO(...) tensorrt_flow::logger::Logger::__log_info(tensorrt_flow::logger::Level::INFO, __VA_ARGS__)
+#define LOG_VERB(...) tensorrt_flow::logger::Logger::__log_info(tensorrt_flow::logger::Level::VERB, __VA_ARGS__)
+#define LOG_DEBUG(...) tensorrt_flow::logger::Logger::__log_info(tensorrt_flow::logger::Level::DEBUG, __VA_ARGS__)
 
 #define DGREEN "\033[1;36m"
 #define BLUE "\033[1;34m"

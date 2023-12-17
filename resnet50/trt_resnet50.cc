@@ -6,6 +6,7 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/opencv.hpp"
 #include "tensorrt_flow/cuda/cuda_helper.hpp"
+#include "tensorrt_flow/tensorrt/trt_logger.hpp"
 
 #include <assert.h>
 namespace tensorrt_flow {
@@ -17,7 +18,7 @@ namespace resnet50 {
 Resnet50Plugin::Resnet50Plugin(const Resnet50Parameter& parameter)
   : parameter_(parameter) {
   image_memory_size_ = parameter.img_info.c * parameter.img_info.w * parameter.img_info.h * sizeof(float);
-  std::cout << "Resnet50Plugin image_memory_size : " << image_memory_size_ << std::endl;
+  LOG_DEBUG("Resnet50Plugin image_memory_size : %d", image_memory_size_);
   CUDA_CHECK(cudaMallocHost((void**)&input_data_, image_memory_size_));
   CUDA_CHECK(cudaMallocHost((void**)&output_data_, 1000 * sizeof(float)));
 }
