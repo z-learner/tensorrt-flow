@@ -2,6 +2,7 @@
 
 #include "NvOnnxParser.h"
 #include "tensorrt_flow/cuda/cuda_helper.hpp"
+#include "tensorrt_flow/tensorrt/trt_utils.hpp"
 
 #include <assert.h>
 #include <exception>
@@ -104,6 +105,22 @@ ModelFramework::ModelFramework(const ModelFrameworkParameter& parameter)
     CUDA_CHECK(cudaMalloc(&(binding_data_[parameter.engine_input_count + index]), DimsSize(outputs_dims_[index]) * GetDataTypeBytes(data_type)));
   }
   CUDA_CHECK(cudaStreamCreate(&stream_));
+}
+
+tensorrt_flow::utils::TimeStatisic ModelFramework::GetPreProcessTimeStatistic(bool reset) {
+  tensorrt_flow::utils::TimeStatisic time_static = pre_process_time_statistic_;
+  if (reset) { pre_process_time_statistic_.reset(); }
+  return time_static;
+}
+tensorrt_flow::utils::TimeStatisic ModelFramework::GetInferProcessTimeStatistic(bool reset) {
+  tensorrt_flow::utils::TimeStatisic time_static = infer_process_time_statistic_;
+  if (reset) { infer_process_time_statistic_.reset(); }
+  return time_static;
+}
+tensorrt_flow::utils::TimeStatisic ModelFramework::GetPostProcessTimeStatistic(bool reset) {
+  tensorrt_flow::utils::TimeStatisic time_static = post_process_time_statistic_;
+  if (reset) { post_process_time_statistic_.reset(); }
+  return time_static;
 }
 
 
