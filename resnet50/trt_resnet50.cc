@@ -6,6 +6,8 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/opencv.hpp"
 #include "tensorrt_flow/cuda/cuda_helper.hpp"
+#include "tensorrt_flow/cuda/image_resize_kernel.hpp"
+#include "tensorrt_flow/image_process/image_resize.hpp"
 #include "tensorrt_flow/tensorrt/trt_logger.hpp"
 
 #include <assert.h>
@@ -27,6 +29,7 @@ Resnet50Plugin::Resnet50Plugin(const Resnet50Parameter& parameter)
 Resnet50Plugin::~Resnet50Plugin() {
   if (input_data_ != nullptr) { CUDA_CHECK(cudaFreeHost(input_data_)); }
   if (output_data_ != nullptr) { CUDA_CHECK(cudaFreeHost(output_data_)); }
+  if (origin_image_memory_device_ != nullptr) { CUDA_CHECK(cudaFree(origin_image_memory_device_)); }
 }
 
 
@@ -38,13 +41,16 @@ bool Resnet50Plugin::PreProcess(const std::any& input_raw_data, void** input_dat
 
   if (input_image.data == nullptr) { std::__throw_runtime_error(fmt::format("can't load {}", input_image_file).c_str()); }
 
-  cv::resize(input_image, input_image, cv::Size(parameter_.img_info.w, parameter_.img_info.h), 0, 0, cv::INTER_LINEAR);
+  // LOG_INFO("input image origin size (%d, %d)", input_image.rows, input_image.cols);
 
+  // use cpu to pre process
+#if 1
+  cv::resize(input_image, input_image, cv::Size(parameter_.img_info.w, parameter_.img_info.h), 0, 0, cv::INTER_LINEAR);
   // normalization and BGR2RGB
   int index;
-  int offset_ch0 = parameter_.img_info.w * 0;
-  int offset_ch1 = parameter_.img_info.h * 1;
-  int offset_ch2 = parameter_.img_info.h * 2;
+  int offset_ch0 = parameter_.img_info.w * parameter_.img_info.h * 0;
+  int offset_ch1 = parameter_.img_info.w * parameter_.img_info.h * 1;
+  int offset_ch2 = parameter_.img_info.w * parameter_.img_info.h * 2;
   for (int i = 0; i < inputs_dims[0].d[2]; i++) {
     for (int j = 0; j < inputs_dims[0].d[3]; j++) {
       index                     = i * inputs_dims[0].d[3] * inputs_dims[0].d[1] + j * inputs_dims[0].d[1];
@@ -53,8 +59,27 @@ bool Resnet50Plugin::PreProcess(const std::any& input_raw_data, void** input_dat
       input_data_[offset_ch0++] = (input_image.data[index + 2] / 255.0f - mean_[2]) / std_[2];
     }
   }
-
   CUDA_CHECK(cudaMemcpyAsync(input_data[0], input_data_, image_memory_size_, cudaMemcpyKind::cudaMemcpyHostToDevice, stream));
+
+#else
+  // use gpu
+  size_t origin_image_size = input_image.rows * input_image.cols * input_image.channels();
+  if (origin_image_memory_size_ < origin_image_size) {
+    // reallocate memeory
+    if (origin_image_memory_device_ != nullptr) {
+      CUDA_CHECK(cudaFree(origin_image_memory_device_));
+      origin_image_memory_device_ = nullptr;
+    }
+    CUDA_CHECK(cudaMalloc(&origin_image_memory_device_, origin_image_size))
+    origin_image_memory_size_ = origin_image_size;
+  }
+
+  CUDA_CHECK(cudaMemcpyAsync(origin_image_memory_device_, input_image.ptr(), origin_image_size, cudaMemcpyHostToDevice, stream));
+  image_process::ResizeTactics tac = image_process::ResizeTactics::GPU_BILINEAR;
+  ::tensorrt_flow::cuda::resize_bgr2rgb_nhwc2nchw_gpu((float*)input_data[0], (uint8_t*)origin_image_memory_device_, parameter_.img_info.w, parameter_.img_info.h, input_image.cols, input_image.rows,
+                                                      mean_[0], mean_[1], mean_[2], std_[0], std_[1], std_[2], tac, &stream);
+#endif
+
   return true;
 }
 

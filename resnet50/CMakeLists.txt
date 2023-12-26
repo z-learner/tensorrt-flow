@@ -23,5 +23,5 @@ include_directories(${tensorrt_flow_INCLUDE_DIRS})
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 
-add_executable(resnet50_infer main.cc trt_resnet50.cc)
-target_link_libraries(resnet50_infer  fmt::fmt ${TENSORRT_LIBS} ${OpenCV_LIBS} ${CUDA_LIBRARIES} tensorrt_flow::tensorrt_flow)
+add_executable(resnet50_infer main.cc trt_resnet50.cc calibrator.cc)
+target_link_libraries(resnet50_infer fmt::fmt ${TENSORRT_LIBS} ${OpenCV_LIBS} ${CUDA_LIBRARIES} tensorrt_flow::cuda_algo_kernel tensorrt_flow::tensorrt_flow tensorrt_flow::image_process )

@@ -2,11 +2,20 @@
 
 #include <iostream>
 #include <limits>
+#include <type_traits>
+
+
+#define DEFINE_HAS_MEMBER_FUNCTION(FunctionName)                                       \
+  template<typename T, typename = void> struct Has##FunctionName : std::false_type {}; \
+  template<typename T> struct Has##FunctionName<T, std::void_t<decltype(&T::FunctionName)>> : std::true_type {}
+
 
 namespace tensorrt_flow {
 
 
 namespace utils {
+
+
 
 class TimeStatisic {
 public:

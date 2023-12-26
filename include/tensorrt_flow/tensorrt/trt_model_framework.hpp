@@ -22,7 +22,6 @@ template<typename T> void destroy_trt_ptr(T* ptr) {
   };
 }
 
-
 struct ModelFrameworkParameter {
   std::string onnx_file_path{""};
   std::string engine_file_path{""};
@@ -35,6 +34,8 @@ struct ModelFrameworkParameter {
   precision::Precision prec{precision::Precision::FP32};
 
   nvinfer1::NetworkDefinitionCreationFlags network_create_flags{1U << static_cast<int>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH)};
+
+  std::shared_ptr<nvinfer1::IInt8EntropyCalibrator2> iint8_calibration{nullptr};
 
   int                          max_engine_workspace_size{1 << 28};
   nvinfer1::ProfilingVerbosity verbosity{nvinfer1::ProfilingVerbosity::kLAYER_NAMES_ONLY};

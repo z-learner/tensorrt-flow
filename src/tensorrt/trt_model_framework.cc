@@ -1,4 +1,4 @@
-#include "tensorrt_flow/tensorrt/trt_model_frramework.hpp"
+#include "tensorrt_flow/tensorrt/trt_model_framework.hpp"
 
 #include "NvOnnxParser.h"
 #include "tensorrt_flow/cuda/cuda_helper.hpp"
@@ -66,6 +66,15 @@ ModelFramework::ModelFramework(const ModelFrameworkParameter& parameter)
       if (!build_->platformHasFastFp16()) { std::__throw_runtime_error(fmt::format("don't support FP16 in this compute").c_str()); }
       config->setFlag(nvinfer1::BuilderFlag::kFP16);
       config->setFlag(parameter.build_percisin_constraints);
+    } else if (parameter.prec == precision::Precision::INT8) {
+      if (!build_->platformHasFastInt8()) { std::__throw_runtime_error(fmt::format("don't support INT8 in this compute").c_str()); }
+      config->setFlag(nvinfer1::BuilderFlag::kINT8);
+      config->setFlag(parameter.build_percisin_constraints);
+    }
+
+    if (parameter.iint8_calibration != nullptr) {
+      LOG_INFO("Use Calibration...");
+      config->setInt8Calibrator(parameter.iint8_calibration.get());
     }
 
     engine_ = std::shared_ptr<nvinfer1::ICudaEngine>(build_->buildEngineWithConfig(*network_, *config), destroy_trt_ptr<nvinfer1::ICudaEngine>);
