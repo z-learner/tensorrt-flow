@@ -22,7 +22,7 @@ __global__ void nearest_bgr2rgb_nhwc2nchw_norm_kernal(float* target, uint8_t* so
   int src_x = floor(x * scale_width);
 
   // Do not compute for out-of-bounds data
-  if (src_x < 0 || src_x >= target_width || src_y < 0 || src_y >= target_height) { return; }
+  if (src_x < 0 || src_x >= source_width || src_y < 0 || src_y >= source_height) { return; }
 
   int tar_idx  = y * target_width + x;
   int tar_area = target_height * target_width;
@@ -49,7 +49,7 @@ __global__ void bilinear_bgr2rgb_nhwc2nchw_norm_kernal(float* target, uint8_t* s
   int src_y2 = src_y1 + 1;
   int src_x2 = src_x1 + 1;
 
-  if (src_x1 < 0 || src_x2 >= target_width || src_y1 < 0 || src_y2 >= target_height) { return; }
+  if (src_x1 < 0 || src_x2 >= source_width || src_y1 < 0 || src_y2 >= source_height) { return; }
 
   // index in source image to 0 ~ 1
   float th = ((y + 0.5) * scale_height - 0.5) - src_y1;
@@ -73,8 +73,10 @@ __global__ void bilinear_bgr2rgb_nhwc2nchw_norm_kernal(float* target, uint8_t* s
 
   // resize, bgr2rgb, hwc2chw
   target[tar_idx] = (round(a1_1 * source[src_idx1_1 + 2] + a1_2 * source[src_idx1_2 + 2] + a2_1 * source[src_idx2_1 + 2] + a2_2 * source[src_idx2_2 + 2]) / 255.0f - mean_channel2) / std_channel2;
+
   target[tar_idx + tar_area] =
     (round(a1_1 * source[src_idx1_1 + 1] + a1_2 * source[src_idx1_2 + 1] + a2_1 * source[src_idx2_1 + 1] + a2_2 * source[src_idx2_2 + 1]) / 255.0f - mean_channel1) / std_channel1;
+
   target[tar_idx + tar_area * 2] = (round(a1_1 * source[src_idx1_1] + a1_2 * source[src_idx1_2] + a2_1 * source[src_idx2_1] + a2_2 * source[src_idx2_2]) / 255.0f - mean_channel0) / std_channel0;
 
   return;
@@ -95,7 +97,7 @@ __global__ void bilinear_bgr2rgb_nhwc2nchw_shift_norm_kernel(float* target, uint
   int src_y2 = src_y1 + 1;
   int src_x2 = src_x1 + 1;
 
-  if (src_x1 < 0 || src_x2 >= target_width || src_y1 < 0 || src_y2 >= target_height) { return; }
+  if (src_x1 < 0 || src_x2 >= source_width || src_y1 < 0 || src_y2 >= source_height) { return; }
 
   // index in source image to 0 ~ 1
   float th = (float)y * scale_height - src_y1;
@@ -137,46 +139,57 @@ void resize_bgr2rgb_nhwc2nchw_gpu(float* target, uint8_t* source, int target_wid
   dim3 dim_block(32, 32, 1);
   dim3 dim_grid(target_width / 32 + 1, target_height / 32 + 1, 1);
 
+  // LOG_INFO(" dim_grid  : (%d, %d) ", dim_grid.x, dim_grid.y);
+  // LOG_INFO(" dim_block : (%d, %d) ", dim_block.x, dim_block.y);
+
   // scaled resize
-  float scaled_height = (float)source_height / target_height;
-  float scaled_width  = (float)source_width / target_width;
+  float scaled_height = static_cast<float>(source_height) / target_height;
+  float scaled_width  = static_cast<float>(source_width) / target_width;
+  // LOG_INFO("source_height : %d", source_height);
+  // LOG_INFO("source_width  : %d", source_width);
+  // LOG_INFO("target_height  : %d", target_height);
+  // LOG_INFO("target_width  : %d", target_width);
+  // LOG_INFO("scaled_height : %f", scaled_height);
+  // LOG_INFO("scaled_width  : %f", scaled_width);
 
   float scale = scaled_height > scaled_width ? scaled_height : scaled_width;
+  // LOG_INFO("scale  : %f", scale);
+
 
   switch (tactics) {
   case image_process::ResizeTactics::GPU_NEAREST:
     if (stream_ptr != nullptr) {
-      nearest_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_block, dim_grid, 0, *stream_ptr>>>(target, source, target_width, target_height, source_width, source_height, scaled_width, scaled_height,
+      nearest_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_grid, dim_block, 0, *stream_ptr>>>(target, source, target_width, target_height, source_width, source_height, scaled_width, scaled_height,
                                                                                      mean_channel0, mean_channel1, mean_channel2, std_channel0, std_channel1, std_channel2);
     } else {
-      nearest_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_block, dim_grid>>>(target, source, target_width, target_height, source_width, source_height, scaled_width, scaled_height, mean_channel0,
+      nearest_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_grid, dim_block>>>(target, source, target_width, target_height, source_width, source_height, scaled_width, scaled_height, mean_channel0,
                                                                      mean_channel1, mean_channel2, std_channel0, std_channel1, std_channel2);
     }
     break;
   case image_process::ResizeTactics::GPU_NEAREST_CENTER:
     if (stream_ptr != nullptr) {
-      nearest_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_block, dim_grid, 0, *stream_ptr>>>(target, source, target_width, target_height, source_width, source_height, scale, scale, mean_channel0,
+      nearest_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_grid, dim_block, 0, *stream_ptr>>>(target, source, target_width, target_height, source_width, source_height, scale, scale, mean_channel0,
                                                                                      mean_channel1, mean_channel2, std_channel0, std_channel1, std_channel2);
     } else {
-      nearest_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_block, dim_grid>>>(target, source, target_width, target_height, source_width, source_height, scale, scale, mean_channel0, mean_channel1,
+      nearest_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_grid, dim_block>>>(target, source, target_width, target_height, source_width, source_height, scale, scale, mean_channel0, mean_channel1,
                                                                      mean_channel2, std_channel0, std_channel1, std_channel2);
     }
     break;
   case image_process::ResizeTactics::GPU_BILINEAR:
     if (stream_ptr != nullptr) {
-      bilinear_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_block, dim_grid, 0, *stream_ptr>>>(target, source, target_width, target_height, source_width, source_height, scaled_width, scaled_height,
+      bilinear_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_grid, dim_block, 0, *stream_ptr>>>(target, source, target_width, target_height, source_width, source_height, scaled_width, scaled_height,
                                                                                       mean_channel0, mean_channel1, mean_channel2, std_channel0, std_channel1, std_channel2);
     } else {
-      bilinear_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_block, dim_grid>>>(target, source, target_width, target_height, source_width, source_height, scaled_width, scaled_height, mean_channel0,
+      bilinear_bgr2rgb_nhwc2nchw_norm_kernal<<<dim_grid, dim_block>>>(target, source, target_width, target_height, source_width, source_height, scaled_width, scaled_height, mean_channel0,
                                                                       mean_channel1, mean_channel2, std_channel0, std_channel1, std_channel2);
     }
     break;
   case image_process::ResizeTactics::GPU_BILINEAR_CENTER:
     if (stream_ptr != nullptr) {
-      bilinear_bgr2rgb_nhwc2nchw_shift_norm_kernel<<<dim_block, dim_grid, 0, *stream_ptr>>>(target, source, target_width, target_height, source_width, source_height, scale, scale, mean_channel0,
+      bilinear_bgr2rgb_nhwc2nchw_shift_norm_kernel<<<dim_grid, dim_block, 0, *stream_ptr>>>(target, source, target_width, target_height, source_width, source_height, scale, scale, mean_channel0,
                                                                                             mean_channel1, mean_channel2, std_channel0, std_channel1, std_channel2);
     } else {
-      bilinear_bgr2rgb_nhwc2nchw_shift_norm_kernel<<<dim_block, dim_grid>>>(target, source, target_width, target_height, source_width, source_height, scale, scale, mean_channel0, mean_channel1,
+      bilinear_bgr2rgb_nhwc2nchw_shift_norm_kernel<<<dim_grid, dim_block>>>(target, source, target_width, target_height, source_width, source_height, scale, scale, mean_channel0, mean_channel1,
                                                                             mean_channel2, std_channel0, std_channel1, std_channel2);
     }
     break;

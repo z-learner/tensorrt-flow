@@ -9,8 +9,10 @@
 #include "tensorrt_flow/cuda/image_resize_kernel.hpp"
 #include "tensorrt_flow/image_process/image_resize.hpp"
 #include "tensorrt_flow/tensorrt/trt_logger.hpp"
+#include "tensorrt_flow/tensorrt/trt_utils.hpp"
 
 #include <assert.h>
+#include <thread>
 namespace tensorrt_flow {
 
 namespace model {
@@ -44,7 +46,7 @@ bool Resnet50Plugin::PreProcess(const std::any& input_raw_data, void** input_dat
   // LOG_INFO("input image origin size (%d, %d)", input_image.rows, input_image.cols);
 
   // use cpu to pre process
-#if 1
+#if 0
   cv::resize(input_image, input_image, cv::Size(parameter_.img_info.w, parameter_.img_info.h), 0, 0, cv::INTER_LINEAR);
   // normalization and BGR2RGB
   int index;
@@ -59,6 +61,30 @@ bool Resnet50Plugin::PreProcess(const std::any& input_raw_data, void** input_dat
       input_data_[offset_ch0++] = (input_image.data[index + 2] / 255.0f - mean_[2]) / std_[2];
     }
   }
+
+#  if 0
+
+  auto image_path = std::filesystem::path(input_image_file);
+
+  auto new_file = image_path.parent_path().string() + "/resize/cpu_resize_" + image_path.filename().string();
+  cv::Mat save_mat(parameter_.img_info.h, parameter_.img_info.w, CV_8UC3);
+
+  // back to HWC
+  offset_ch0 = parameter_.img_info.w * parameter_.img_info.h * 0;
+  offset_ch1 = parameter_.img_info.w * parameter_.img_info.h * 1;
+  offset_ch2 = parameter_.img_info.w * parameter_.img_info.h * 2;
+  for (int i = 0; i < parameter_.img_info.h; ++i) {
+    for (int j = 0; j < parameter_.img_info.w; ++j) {
+      index                    = i * parameter_.img_info.w * parameter_.img_info.c + j * parameter_.img_info.c;
+      save_mat.data[index + 0] = (input_data_[offset_ch2++] * std_[0] + mean_[0]) * 255.0f;
+      save_mat.data[index + 1] = (input_data_[offset_ch1++] * std_[1] + mean_[1]) * 255.0f;
+      save_mat.data[index + 2] = (input_data_[offset_ch0++] * std_[2] + mean_[2]) * 255.0f;
+    }
+  }
+
+  cv::imwrite(new_file, save_mat);
+#  endif
+
   CUDA_CHECK(cudaMemcpyAsync(input_data[0], input_data_, image_memory_size_, cudaMemcpyKind::cudaMemcpyHostToDevice, stream));
 
 #else
@@ -76,8 +102,39 @@ bool Resnet50Plugin::PreProcess(const std::any& input_raw_data, void** input_dat
 
   CUDA_CHECK(cudaMemcpyAsync(origin_image_memory_device_, input_image.ptr(), origin_image_size, cudaMemcpyHostToDevice, stream));
   image_process::ResizeTactics tac = image_process::ResizeTactics::GPU_BILINEAR;
+
   ::tensorrt_flow::cuda::resize_bgr2rgb_nhwc2nchw_gpu((float*)input_data[0], (uint8_t*)origin_image_memory_device_, parameter_.img_info.w, parameter_.img_info.h, input_image.cols, input_image.rows,
                                                       mean_[0], mean_[1], mean_[2], std_[0], std_[1], std_[2], tac, &stream);
+
+#  if 0
+  CUDA_CHECK(cudaStreamSynchronize(stream));
+
+  std::vector<float> input_data_tmp(parameter_.img_info.w * parameter_.img_info.h * parameter_.img_info.c);
+
+  CUDA_CHECK(cudaMemcpy(input_data_tmp.data(), input_data[0], input_data_tmp.size() * sizeof(float), cudaMemcpyDeviceToHost))
+
+  auto image_path = std::filesystem::path(input_image_file);
+
+  auto new_file = image_path.parent_path().string() + "/resize/gpu_resize_" + image_path.filename().string();
+
+  cv::Mat save_mat(parameter_.img_info.h, parameter_.img_info.w, CV_8UC3);
+
+  // back to HWC
+  int offset_ch0 = parameter_.img_info.w * parameter_.img_info.h * 0;
+  int offset_ch1 = parameter_.img_info.w * parameter_.img_info.h * 1;
+  int offset_ch2 = parameter_.img_info.w * parameter_.img_info.h * 2;
+  for (int i = 0; i < parameter_.img_info.h; ++i) {
+    for (int j = 0; j < parameter_.img_info.w; ++j) {
+      int index                = i * parameter_.img_info.w * parameter_.img_info.c + j * parameter_.img_info.c;
+      save_mat.data[index + 0] = (input_data_tmp[offset_ch2++] * std_[0] + mean_[0]) * 255.0f;
+      save_mat.data[index + 1] = (input_data_tmp[offset_ch1++] * std_[1] + mean_[1]) * 255.0f;
+      save_mat.data[index + 2] = (input_data_tmp[offset_ch0++] * std_[2] + mean_[2]) * 255.0f;
+    }
+  }
+
+  cv::imwrite(new_file, save_mat);
+#  endif
+
 #endif
 
   return true;
